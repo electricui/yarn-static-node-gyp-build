@@ -1,16 +1,5 @@
 import { CwdFS, Filename, PortablePath, ZipOpenFS } from '@yarnpkg/fslib'
-import {
-  FetchResult,
-  Locator,
-  Manifest,
-  MessageName,
-  Package,
-  Project,
-  ReportError,
-  StreamReport,
-  miscUtils,
-  structUtils,
-} from '@yarnpkg/core'
+import { Locator, MessageName, Package, Project, ReportError, StreamReport, structUtils } from '@yarnpkg/core'
 
 import { InstallOptions } from '@yarnpkg/core/lib/Project'
 import { PassThrough } from 'stream'
@@ -18,59 +7,79 @@ import { getLibzipPromise } from '@yarnpkg/libzip'
 import { ppath } from '@yarnpkg/fslib'
 
 import { path as gypFindBinding } from 'node-gyp-build'
+import path = require('path')
 
-export async function mutatePackage(pkg: Package, project: Project, opts: InstallOptions) {
+export async function mutatePackage(
+  pkg: Package,
+  nodeGypBuildPkgToReplace: Package,
+  project: Project,
+  opts: InstallOptions,
+) {
+  const { packageLocation: nativePackageLocation, packageFs: nativePackageFs } = await initializePackageEnvironment(
+    nodeGypBuildPkgToReplace,
+    project,
+  )
   const { packageLocation, packageFs } = await initializePackageEnvironment(pkg, project)
 
+  // const prebuildHashEntropy = `${structUtils.stringifyIdent(pkg)}-${pkg.version}-${
+  //   process.platform
+  // }-${normalisedArch()}-${prebuildOptions.runtime}-${prebuildOptions.abi}`.replace(/\//g, '-')
+
+  // // Check if the cache key exists / matches
+  // const cacheKeyLocation = ppath.join(nativePackageLocation, `.cache_key` as Filename)
+  // if (await nativePackageFs.existsPromise(cacheKeyLocation)) {
+  //   const cacheKey = (await nativePackageFs.readFilePromise(cacheKeyLocation)).toString()
+
+  //   if (cacheKey === prebuildHashEntropy) {
+  //     // We've already done this, we can skip it.
+  //     opts.report.reportInfo(
+  //       MessageName.UNNAMED,
+  //       `${structUtils.stringifyLocator(pkg)} cache keys match, skipping installation`,
+  //     )
+  //     return
+  //   }
+  // }
+
+  // Find the correct binding using node-gyp-build
   const bindingLocation = gypFindBinding(packageLocation) as string | undefined
-  const relativeToPackage = ppath.relative(packageLocation, bindingLocation as PortablePath)
-  const relativeToLoadBindingsFile = ppath.relative(
-    ppath.join(packageLocation, `dist` as Filename),
-    bindingLocation as PortablePath,
-  )
-  const loadBindingsFilePath = ppath.join(packageLocation, `dist` as PortablePath, `load-bindings.js` as Filename)
+  const bindingLocationRelative = ppath.relative(packageLocation, bindingLocation as PortablePath)
+  const bindingFileName = ppath.basename(bindingLocationRelative)
 
-  if (bindingLocation) {
-    opts.report.reportInfo(
+  // Copy the binding file
+  let nodeContents: Buffer = await packageFs.readFilePromise(bindingLocationRelative)
+
+  if (nodeContents === null)
+    throw new ReportError(
       MessageName.UNNAMED,
-      `Found prebuild for ${structUtils.stringifyLocator(pkg)}: ${relativeToPackage}`,
+      `Was unable to find node file in prebuild package for "${structUtils.stringifyIdent(pkg)}"`,
     )
-  } else {
-    opts.report.reportWarning(MessageName.UNNAMED, `Couldn't find prebuild for ${structUtils.stringifyLocator(pkg)}`)
-    return
-  }
 
-  opts.report.reportInfo(MessageName.UNNAMED, `relativeLocation: ${relativeToLoadBindingsFile}`)
-  opts.report.reportInfo(MessageName.UNNAMED, `loadBindingsFilePath: ${loadBindingsFilePath}`)
+  // Write our package.json
+  await nativePackageFs.writeJsonPromise(ppath.join(nativePackageLocation, `package.json` as Filename), {
+    name: structUtils.slugifyLocator(nodeGypBuildPkgToReplace),
+    main: `./index.js`,
+    preferUnplugged: true, // Tell yarn to unplug the node-gyp-build replacement package
+  })
 
-  const loadBindingsTemplate = `"use strict";
-// Automatically generated bindings file for ${structUtils.stringifyIdent(pkg)}
+  // write our index.js
+  const templateIndex = `// Automatically generated bindings file for ${structUtils.stringifyIdent(pkg)}
 // Package version: ${pkg.version}
-// Bindings taken from: ${relativeToPackage}
+// Bindings taken from: ${bindingLocationRelative}
 
-const binding = require("${relativeToLoadBindingsFile}");
-
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
+const staticRequire = require("./${bindingFileName}");
+module.exports = (fileLookingFor) => {
+  return staticRequire;
 };
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.asyncWrite = exports.asyncRead = exports.asyncUpdate = exports.asyncSet = exports.asyncOpen = exports.asyncList = exports.asyncGetBaudRate = exports.asyncGet = exports.asyncFlush = exports.asyncDrain = exports.asyncClose = void 0;
-const util_1 = require("util");
-const path_1 = require("path");
-exports.asyncClose = binding.close ? (0, util_1.promisify)(binding.close) : async () => { throw new Error('"binding.close" Method not implemented'); };
-exports.asyncDrain = binding.drain ? (0, util_1.promisify)(binding.drain) : async () => { throw new Error('"binding.drain" Method not implemented'); };
-exports.asyncFlush = binding.flush ? (0, util_1.promisify)(binding.flush) : async () => { throw new Error('"binding.flush" Method not implemented'); };
-exports.asyncGet = binding.get ? (0, util_1.promisify)(binding.get) : async () => { throw new Error('"binding.get" Method not implemented'); };
-exports.asyncGetBaudRate = binding.getBaudRate ? (0, util_1.promisify)(binding.getBaudRate) : async () => { throw new Error('"binding.getBaudRate" Method not implemented'); };
-exports.asyncList = binding.list ? (0, util_1.promisify)(binding.list) : async () => { throw new Error('"binding.list" Method not implemented'); };
-exports.asyncOpen = binding.open ? (0, util_1.promisify)(binding.open) : async () => { throw new Error('"binding.open" Method not implemented'); };
-exports.asyncSet = binding.set ? (0, util_1.promisify)(binding.set) : async () => { throw new Error('"binding.set" Method not implemented'); };
-exports.asyncUpdate = binding.update ? (0, util_1.promisify)(binding.update) : async () => { throw new Error('"binding.update" Method not implemented'); };
-exports.asyncRead = binding.read ? (0, util_1.promisify)(binding.read) : async () => { throw new Error('"binding.read" Method not implemented'); };
-exports.asyncWrite = binding.read ? (0, util_1.promisify)(binding.write) : async () => { throw new Error('"binding.write" Method not implemented'); };`
+`
+  await nativePackageFs.writeFilePromise(ppath.join(nativePackageLocation, `index.js` as Filename), templateIndex)
 
-  // Overwrite the file
-  await packageFs.writeFilePromise(loadBindingsFilePath, loadBindingsTemplate)
+  // Write the file into the generated package
+  await nativePackageFs.writeFilePromise(ppath.join(nativePackageLocation, bindingFileName), nodeContents)
+
+  // // Write the cache key
+  // await nativePackageFs.writeFilePromise(cacheKeyLocation, prebuildHashEntropy)
+
+  opts.report.reportInfo(MessageName.UNNAMED, `Installed prebuild for ${structUtils.stringifyLocator(pkg)}`)
 }
 
 async function initializePackageEnvironment(locator: Locator, project: Project) {

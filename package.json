@@ -1,5 +1,5 @@
 {
-  "name": "@electricui/yarn-plugin-static-serialport-bindings-cpp",
+  "name": "@electricui/yarn-plugin-static-node-gyp-build",
   "version": "0.1.0",
   "author": "Electric UI <support@electricui.com> (https://electricui.com)",
   "main": "./sources/index.ts",
@@ -22,6 +22,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/electricui/yarn-static-serialport-bindings-cpp.git"
+    "url": "https://github.com/electricui/yarn-static-node-gyp-build.git"
   }
 }
