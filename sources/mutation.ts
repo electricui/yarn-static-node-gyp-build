@@ -6,8 +6,7 @@ import { PassThrough } from 'stream'
 import { getLibzipPromise } from '@yarnpkg/libzip'
 import { ppath } from '@yarnpkg/fslib'
 
-import { path as gypFindBinding } from 'node-gyp-build'
-import path = require('path')
+import { gypFindBinding } from './nodeGypBuild'
 
 export async function mutatePackage(
   pkg: Package,
@@ -41,8 +40,13 @@ export async function mutatePackage(
   // }
 
   // Find the correct binding using node-gyp-build
-  const bindingLocation = gypFindBinding(packageLocation) as string | undefined
-  const bindingLocationRelative = ppath.relative(packageLocation, bindingLocation as PortablePath)
+  const bindingLocation = await gypFindBinding(packageLocation, packageFs)
+
+  if (bindingLocation === null) {
+    opts.report.reportError(MessageName.UNNAMED, `Unable to locate prebuild for ${structUtils.stringifyLocator(pkg)}`)
+  }
+
+  const bindingLocationRelative = ppath.relative(packageLocation, bindingLocation)
   const bindingFileName = ppath.basename(bindingLocationRelative)
 
   // Copy the binding file
