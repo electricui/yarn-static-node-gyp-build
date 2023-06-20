@@ -1,10 +1,11 @@
-import { CwdFS, Filename, PortablePath, ZipOpenFS } from '@yarnpkg/fslib'
+import { CwdFS, Filename, PortablePath } from '@yarnpkg/fslib'
 import { Locator, MessageName, Package, Project, ReportError, StreamReport, structUtils } from '@yarnpkg/core'
 
 import { InstallOptions } from '@yarnpkg/core/lib/Project'
 import { PassThrough } from 'stream'
 import { getLibzipPromise } from '@yarnpkg/libzip'
 import { ppath } from '@yarnpkg/fslib'
+import { ZipOpenFS } from '@yarnpkg/libzip'
 
 import { gypFindBinding } from './nodeGypBuild'
 
@@ -83,7 +84,7 @@ module.exports = (fileLookingFor) => {
   // // Write the cache key
   // await nativePackageFs.writeFilePromise(cacheKeyLocation, prebuildHashEntropy)
 
-  opts.report.reportInfo(MessageName.UNNAMED, `Installed prebuild for ${structUtils.stringifyLocator(pkg)}`)
+  opts.report.reportInfo(MessageName.UNNAMED, `Installed prebuild for ${structUtils.stringifyLocator(pkg)} from ${bindingLocationRelative}`)
 }
 
 async function initializePackageEnvironment(locator: Locator, project: Project) {

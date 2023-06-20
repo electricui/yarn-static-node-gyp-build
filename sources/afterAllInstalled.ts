@@ -1,7 +1,6 @@
 import { DescriptorHash, LocatorHash, MessageName, Package, Project, structUtils } from '@yarnpkg/core'
 
 import { InstallOptions } from '@yarnpkg/core/lib/Project'
-import { convertLocatorToDescriptor } from '@yarnpkg/core/lib/structUtils'
 import { mutatePackage } from './mutation'
 
 function isNodeGypBuildDependency(pkg: Package) {
@@ -24,7 +23,7 @@ async function findNodeGypBuildEntries(project: Project, opts: InstallOptions) {
   // First find the node-gyp-build packages
   for (const pkg of project.storedPackages.values()) {
     if (isNodeGypBuildDependency(pkg)) {
-      nodeGypBuildEntries.set(convertLocatorToDescriptor(pkg).descriptorHash, pkg)
+      nodeGypBuildEntries.set(structUtils.convertLocatorToDescriptor(pkg).descriptorHash, pkg)
     }
   }
 
